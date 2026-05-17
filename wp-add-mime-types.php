@@ -1,20 +1,25 @@
 <?php
 /*
-Plugin Name: WP Add Mime Types 
+Plugin Name: Add MIME Types
 Plugin URI: 
 Description: The plugin additionally allows the mime types and file extensions to WordPress.
-Version: 3.1.2
+Version: 3.2.0
+Tested up to: 7.0
 Author: Kimiya Kitani
 Author URI: http://kitaney-wordpress.blogspot.jp/
 Text Domain: wp-add-mime-types
-Domain Path: /lang
+License: GPL v2
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
 */
+if ( ! defined( 'ABSPATH' ) ) exit;
+
 define('WAMT_DEFAULT_VAR', '3.1.1');
 define('WAMT_PLUGIN_DIR', 'wp-add-mime-types');
 define('WAMT_PLUGIN_NAME', 'wp-add-mime-types');
 define('WAMT_PLUGIN_BASENAME', WAMT_PLUGIN_DIR . '/' . WAMT_PLUGIN_NAME . '.php');
 define('WAMT_SITEADMIN_SETTING_FILE', 'wp_add_mime_types_network_array');
 define('WAMT_SETTING_FILE', 'wp_add_mime_types_array');
+define('WAMT_DEBUG_OPTION', 'wp_add_mime_types_last_debug');
 
 require_once( dirname( __FILE__  ) . '/includes/admin.php');
 
@@ -22,17 +27,12 @@ require_once( dirname( __FILE__  ) . '/includes/admin.php');
 function wamt_uninstaller(){
 	if(is_multisite())
 		delete_site_option(WAMT_SITEADMIN_SETTING_FILE);
+	delete_site_option(WAMT_DEBUG_OPTION);
+	delete_option(WAMT_DEBUG_OPTION);
 	delete_option(WAMT_SETTING_FILE);
 }
 if ( function_exists('register_uninstall_hook') )
 	register_uninstall_hook( __FILE__, 'wamt_uninstaller' );
-
-// Multi-language support.
-function wamt_enable_language_translation(){
- load_plugin_textdomain('wp-add-mime-types')
-	or load_plugin_textdomain('wp-add-mime-types', false, dirname( WAMT_PLUGIN_BASENAME ) . '/lang/');
-}
-add_action('plugins_loaded', 'wamt_enable_language_translation');
 
 // Add Setting to WordPress 'Settings' menu for Multisite.
 if(is_multisite()){
@@ -91,29 +91,111 @@ add_filter( 'upload_mimes', 'wamt_add_allow_upload_extension');
 function wamt_remove_underscore($filename, $filename_raw){
 	return str_replace("_.", ".", $filename);
 }
+
+function wamt_update_last_mime_debug_result( $data, $file, $filename, $mimes, $real_mime = null ) {
+	$wp_filetype = wp_check_filetype( $filename, $mimes );
+	$fileinfo_mime = '';
+
+	if ( is_readable( $file ) && function_exists( 'finfo_open' ) ) {
+		$finfo = finfo_open( FILEINFO_MIME_TYPE );
+		if ( $finfo ) {
+			$fileinfo_mime = finfo_file( $finfo, $file );
+			finfo_close( $finfo );
+		}
+	}
+
+	$debug_data = array(
+		'time'            => sanitize_text_field( current_time( 'mysql' ) ),
+		'timestamp'       => time(),
+		'filename'        => sanitize_file_name( wp_basename( $filename ) ),
+		'ext'             => isset( $data['ext'] ) && $data['ext'] ? sanitize_key( $data['ext'] ) : '',
+		'type'            => isset( $data['type'] ) && $data['type'] ? sanitize_mime_type( $data['type'] ) : '',
+		'proper_filename' => isset( $data['proper_filename'] ) && $data['proper_filename'] ? sanitize_file_name( $data['proper_filename'] ) : '',
+		'real_mime'       => $real_mime ? sanitize_mime_type( $real_mime ) : '',
+		'fileinfo_result' => $fileinfo_mime ? sanitize_mime_type( $fileinfo_mime ) : '',
+		'expected_ext'    => isset( $wp_filetype['ext'] ) && $wp_filetype['ext'] ? sanitize_key( $wp_filetype['ext'] ) : '',
+		'expected_mime'   => isset( $wp_filetype['type'] ) && $wp_filetype['type'] ? sanitize_mime_type( $wp_filetype['type'] ) : '',
+		'result'          => array(
+			'ext'             => isset( $data['ext'] ) && $data['ext'] ? sanitize_key( $data['ext'] ) : '',
+			'type'            => isset( $data['type'] ) && $data['type'] ? sanitize_mime_type( $data['type'] ) : '',
+			'proper_filename' => isset( $data['proper_filename'] ) && $data['proper_filename'] ? sanitize_file_name( $data['proper_filename'] ) : '',
+		),
+		'user_id'         => get_current_user_id(),
+		'blog_id'         => is_multisite() ? get_current_blog_id() : 0,
+	);
+
+	if ( is_multisite() && function_exists( 'is_plugin_active_for_network' ) && is_plugin_active_for_network( WAMT_PLUGIN_BASENAME ) ) {
+		update_site_option( WAMT_DEBUG_OPTION, $debug_data );
+	} else {
+		update_option( WAMT_DEBUG_OPTION, $debug_data );
+	}
+}
+
+function wamt_get_last_mime_debug_result() {
+	if ( ! function_exists( 'is_plugin_active_for_network' ) )
+		require_once( ABSPATH . '/wp-admin/includes/plugin.php' );
+
+	if ( is_multisite() && is_plugin_active_for_network( WAMT_PLUGIN_BASENAME ) )
+		return get_site_option( WAMT_DEBUG_OPTION );
+
+	return get_option( WAMT_DEBUG_OPTION );
+}
+
+function wamt_render_last_mime_debug_result() {
+	$debug_data = wamt_get_last_mime_debug_result();
+?>
+     <fieldset style="border:1px solid #777777; width: 750px; padding-left: 6px; padding-bottom: 1em;">
+		<legend><h3><?php esc_html_e( 'Last MIME debug result', 'wp-add-mime-types' ); ?></h3></legend>
+<?php if ( ! empty( $debug_data ) && is_array( $debug_data ) ) : ?>
+		<table>
+			<tbody>
+				<tr><th scope="row"><?php esc_html_e( 'Time', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['time'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Filename', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['filename'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Extension', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['ext'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Type', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['type'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Proper filename', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['proper_filename'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Real MIME', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['real_mime'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Fileinfo result', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['fileinfo_result'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Expected extension', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['expected_ext'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Expected MIME', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['expected_mime'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'User ID', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['user_id'] ?? '' ); ?></td></tr>
+				<tr><th scope="row"><?php esc_html_e( 'Blog ID', 'wp-add-mime-types' ); ?></th><td><?php echo esc_html( $debug_data['blog_id'] ?? '' ); ?></td></tr>
+			</tbody>
+		</table>
+		<p><textarea cols="100" rows="8" readonly><?php echo esc_textarea( wp_json_encode( $debug_data, JSON_PRETTY_PRINT ) ); ?></textarea></p>
+<?php else : ?>
+		<p><?php esc_html_e( 'No MIME debug result has been recorded yet.', 'wp-add-mime-types' ); ?></p>
+<?php endif; ?>
+     </fieldset>
+<?php
+}
+
 // Exception for WordPress 4.7.1 file contents check system using finfo_file (wp-includes/functions.php)
 // In case of custom extension in this plugins' setting, the WordPress 4.7.1 file contents check system is always true.
 
 function wamt_add_allow_upload_extension_exception( $data, $file, $filename,$mimes,$real_mime=null) {
 	$mime_type_values = false;
 
+	if ( ! function_exists( 'is_plugin_active_for_network' ) )
+		require_once( ABSPATH . '/wp-admin/includes/plugin.php' );
+
 	if(is_multisite() && is_plugin_active_for_network(WAMT_PLUGIN_BASENAME))
 		$settings = get_site_option(WAMT_SITEADMIN_SETTING_FILE);
 	else
 		$settings = get_option(WAMT_SETTING_FILE);
 
-	if ( ! function_exists( 'is_plugin_active_for_network' ) )
-		require_once( ABSPATH . '/wp-admin/includes/plugin.php' );
-
-	if(!isset($settings['mime_type_values']) || empty($settings['mime_type_values'])) 
-		return $data;
+	if(!isset($settings['mime_type_values']) || empty($settings['mime_type_values']))
+		$mime_type_values = array();
 	else
 		$mime_type_values = maybe_unserialize($settings['mime_type_values']);
 
+	if(isset($settings['security_attempt_enable']) && $settings['security_attempt_enable'] === "yes" && isset($settings['file_type_debug']) && $settings['file_type_debug'] === "yes")
+		wamt_update_last_mime_debug_result( $data, $file, $filename, $mimes, $real_mime );
+
 	$ext = $type = $proper_filename = false;
 	if(isset($data['ext'])) $ext = $data['ext'];
-	if(isset($data['type'])) $ext = $data['type'];
-	if(isset($data['proper_filename'])) $ext = $data['proper_filename'];
+	if(isset($data['type'])) $type = $data['type'];
+	if(isset($data['proper_filename'])) $proper_filename = $data['proper_filename'];
 	if($ext != false && $type != false) return $data;	
 
 	// If file extension is 2 or more 
@@ -133,7 +215,6 @@ function wamt_add_allow_upload_extension_exception( $data, $file, $filename,$mim
 		// The following function fixes the sanitized extension when a file is uploaded in the media in case of allowed extensions. 
 		// ex. XXX.YYY.ZZZ -- sanitized --> XXX_.YYY.ZZZ -- fixed the plugin --> XXX.YYY.ZZZ
 		// In detail, please see sanitize_file_name function in "wp-includes/formatting.php".
-		//var_dump($settings['filename_sanitized_enable']);
 		if(isset($settings['filename_sanitized_enable']) && $settings['filename_sanitized_enable'] === "yes"){
 		}else{
 			add_filter( 'sanitize_file_name', 'wamt_remove_underscore', 10, 2 );
@@ -142,14 +223,11 @@ function wamt_add_allow_upload_extension_exception( $data, $file, $filename,$mim
 
 	// If "security_attempt_enable" option disables (default) in the admin menu, the plugin avoids the security check regarding a file extension by WordPress core because of flexible management.
 	if(isset($settings['security_attempt_enable']) && $settings['security_attempt_enable'] === "yes"){
-		if(isset($settings['file_type_debug']) && $settings['file_type_debug'] === "yes"):
-			$finfo     = finfo_open( FILEINFO_MIME_TYPE );
-			$real_mime = finfo_file($finfo,$file);
-			var_dump(__("WordPress recognizes that the file type is [". finfo_file($finfo,$file) . "].",'wp-add-mime-types'));
-			finfo_close($finfo);
-		endif;
 		return $data;
 	}
+
+	if(empty($mime_type_values))
+		return $data;
 
 		
 	$flag = false;

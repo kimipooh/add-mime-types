@@ -1,10 +1,10 @@
-=== WP Add Mime Types ===
+=== Add MIME Types ===
 Contributors: kimipooh
 Tags: mime,file extention
 Requires at least: 6.2
 Requires PHP: 7.4
-Tested up to: 6.7.2
-Stable tag: 3.1.2
+Tested up to: 7.0
+Stable tag: 3.2.0
 License: GPL v2
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,9 +95,14 @@ The files which has "bmp" file extention becomes not to be able to upload.
 4. Security Options
 
 == Changelog ==
-= 3.1.2 =
-- Tested up WordPress 6.7.2 with PHP 8.3.19 and 8.4.5.
-- PHP 7.4 will soon no longer be supported.
+= 3.2.0 =
+- Changed the plugin display name to Add MIME Types.
+- Addressed WordPress.org Plugin Check issues.
+- Tested with WordPress 7.0.
+- Confirmed compatibility with PHP 8.4 and PHP 8.5.
+- Improved security, sanitization, and escaping.
+- Improved the safety of the admin settings screens.
+- Changed the file type debug option to record the last MIME detection result on the settings screen instead of stopping uploads with direct debug output.
 
 = 3.1.1 =
 - Fixes the type format mismatch issues since PHP 8.1 or later.
@@ -274,4 +279,3 @@ The files which has "bmp" file extention becomes not to be able to upload.
 
 
 == Upgrade Notice ==
-

@@ -1,4 +1,6 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
 function wamt_network_add_to_settings_menu(){
 	if ( ! function_exists( 'is_plugin_active_for_network' ) ) 
 		require_once( ABSPATH . '/wp-admin/includes/plugin.php' );	
@@ -9,7 +11,7 @@ function wamt_network_add_to_settings_menu(){
 	$admin_permission = 'manage_network_options';
 
     // add_options_page (Title, Setting Title, Permission, Special Definition, function name); 
-	add_submenu_page( 'settings.php', __('WP Add Mime Types Admin Settings for Network Administrator', 'wp-add-mime-types'), __('Mime Type Settings','wp-add-mime-types'), $admin_permission, __FILE__, 'wamt_network_admin_settings_page');
+	add_submenu_page( 'settings.php', __('WP Add Mime Types Admin Settings for Network Administrator', 'wp-add-mime-types'), __('Mime Type Settings','wp-add-mime-types'), $admin_permission, WAMT_PLUGIN_NAME . '-network', 'wamt_network_admin_settings_page');
 }
 
 // Processing Setting menu for the plugin.
@@ -27,10 +29,11 @@ function wamt_network_admin_settings_page(){
 	if(isset($settings['mime_type_values']) && !empty($settings['mime_type_values']))
 		$mime_type_values = unserialize($settings['mime_type_values']);
 	// When the adding data is saved (posted) at the setting menu, the data will update to the WordPress database after the security check
-	if(isset($_POST["wamt-network-form"]) && $_POST["wamt-network-form"]){
+	$wamt_network_form_submitted = isset( $_POST["wamt-network-form"] ) && sanitize_text_field( wp_unslash( $_POST["wamt-network-form"] ) );
+	if( $wamt_network_form_submitted && current_user_can( $admin_permission ) ){
 		if(check_admin_referer("wamt-network-nonce-key", "wamt-network-form")){
 			if(isset($_POST['mime_type_values'])){
-				$p_set = esc_attr(strip_tags(html_entity_decode($_POST['mime_type_values']),ENT_QUOTES));
+				$p_set = sanitize_textarea_field( wp_unslash( $_POST['mime_type_values'] ) );
 				$mime_type_values = explode("\n", $p_set);
 				if(!empty($mime_type_values)){
 					foreach($mime_type_values as $m_type=>$m_value)
@@ -42,40 +45,25 @@ function wamt_network_admin_settings_page(){
 			//else
 			//	$mime_type_values = unserialize($settings['mime_type_values']);
 
-			if(!isset($settings['security_attempt_enable']))
-				$settings['security_attempt_enable'] = "no";
-			else{
-				if(isset($_POST['security_attempt_enable']))
-					$settings['security_attempt_enable'] = wp_strip_all_tags($_POST['security_attempt_enable']);
-			}
-			if(!isset($settings['filename_sanitized_enable']))
-				$settings['filename_sanitized_enable'] = "no";
-			else{
-				if(isset($_POST['filename_sanitized_enable']))
-					$settings['filename_sanitized_enable'] = wp_strip_all_tags($_POST['filename_sanitized_enable']);
-			}
-			if(!isset($settings['file_type_debug']))
-				$settings['file_type_debug'] = "no";
-			else{
-				if(isset($_POST['file_type_debug']))
-					$settings['file_type_debug'] = wp_strip_all_tags($_POST['file_type_debug']);
-			}
+			$settings['security_attempt_enable'] = isset($_POST['security_attempt_enable']) ? sanitize_text_field( wp_unslash( $_POST['security_attempt_enable'] ) ) : "no";
+			$settings['filename_sanitized_enable'] = isset($_POST['filename_sanitized_enable']) ? sanitize_text_field( wp_unslash( $_POST['filename_sanitized_enable'] ) ) : "no";
+			$settings['file_type_debug'] = isset($_POST['file_type_debug']) ? sanitize_text_field( wp_unslash( $_POST['file_type_debug'] ) ) : "no";
 			// Update on wp_sitemeta
 			update_site_option(WAMT_SITEADMIN_SETTING_FILE, $settings);
 		}
 	}
 
 ?>
-<div class="network_add_mime_media_admin_setting_page_updated"><p><strong><?php _e('Updated', 'wp-add-mime-types'); ?></strong></p></div>
+<div class="network_add_mime_media_admin_setting_page_updated"><p><strong><?php esc_html_e('Updated', 'wp-add-mime-types'); ?></strong></p></div>
 
 <div id="network_add_mime_media_admin_menu">
-  <h2><?php _e('WP Add Mime Types Admin Settings for Network Administrator', 'wp-add-mime-types'); ?></h2>
+  <h2><?php esc_html_e('WP Add Mime Types Admin Settings for Network Administrator', 'wp-add-mime-types'); ?></h2>
 
   <form method="post" action="">
 	<?php // for CSRF (Cross-Site Request Forgery): https://propansystem.net/blog/2018/02/20/post-6279/
 		wp_nonce_field("wamt-network-nonce-key", "wamt-network-form"); ?>
      <fieldset style="border:1px solid #777777; width: 750px; padding-left: 6px;">
-		<legend><h3><?php _e('List of allowed mime types and file extensions by WordPress','wp-add-mime-types'); ?></h3></legend>
+		<legend><h3><?php esc_html_e('List of allowed mime types and file extensions by WordPress','wp-add-mime-types'); ?></h3></legend>
 		<div style="overflow:scroll; height: 500px;">
 		<table>
 <?php
@@ -105,9 +93,9 @@ if(!empty($allowed_mime_values)){
 					break;
 				}
 			}
-			echo "<tr><td$add_mime_type_check>$type</td><td$add_mime_type_check>=</td><td$add_mime_type_check>$value</td></tr>\n";
+			echo '<tr><td' . wp_kses_post( $add_mime_type_check ) . '>' . esc_html( $type ) . '</td><td' . wp_kses_post( $add_mime_type_check ) . '>=</td><td' . wp_kses_post( $add_mime_type_check ) . '>' . esc_html( $value ) . "</td></tr>\n";
 		}else{
-			echo "<tr><td>$type</td><td>=</td><td>$value</td></tr>\n";
+			echo '<tr><td>' . esc_html( $type ) . '</td><td>=</td><td>' . esc_html( $value ) . "</td></tr>\n";
 		}
 	}
 }
@@ -118,37 +106,40 @@ if(!empty($allowed_mime_values)){
 	 <br/>
 
      <fieldset style="border:1px solid #777777; width: 750px; padding-left: 6px; padding-bottom: 1em;">
-		<legend><h3><?php _e('Security Options','wp-add-mime-types'); ?></h3></legend>
-		<?php  _e('* The plugin avoids some security checks by WordPress core. If you do not want to avoid them, please turn on the following setting.','wp-add-mime-types'); ?></p>
+		<legend><h3><?php esc_html_e('Security Options','wp-add-mime-types'); ?></h3></legend>
+		<?php  esc_html_e('* The plugin avoids some security checks by WordPress core. If you do not want to avoid them, please turn on the following setting.','wp-add-mime-types'); ?></p>
 
 	<?php //  ?>
 		<p>
 			<input type="hidden" name="security_attempt_enable" value="no" />
-			<input type="checkbox" name="security_attempt_enable" value="yes" <?php if( isset($settings['security_attempt_enable']) && $settings['security_attempt_enable'] === "yes" ) echo "checked"; ?> <?php if(!$permission) echo "disabled"; ?>/> <?php _e('Enable the attempt to determine the real file type of a file by WordPress core.','wp-add-mime-types'); ?>
+			<input type="checkbox" name="security_attempt_enable" value="yes" <?php checked( isset($settings['security_attempt_enable']) && $settings['security_attempt_enable'] === "yes" ); ?> <?php disabled( !$permission ); ?>/> <?php esc_html_e('Enable the attempt to determine the real file type of a file by WordPress core.','wp-add-mime-types'); ?>
 		</p>
 		<p>
 			<input type="hidden" name="filename_sanitized_enable" value="no" />
-			<input type="checkbox" name="filename_sanitized_enable" value="yes" <?php if( isset($settings['filename_sanitized_enable']) && $settings['filename_sanitized_enable'] === "yes" ) echo "checked"; ?> <?php if(!$permission) echo "disabled"; ?>/> <?php _e('Enable to sanitize the multiple file extensions within the filename by WordPress core.','wp-add-mime-types'); ?>
+			<input type="checkbox" name="filename_sanitized_enable" value="yes" <?php checked( isset($settings['filename_sanitized_enable']) && $settings['filename_sanitized_enable'] === "yes" ); ?> <?php disabled( !$permission ); ?>/> <?php esc_html_e('Enable to sanitize the multiple file extensions within the filename by WordPress core.','wp-add-mime-types'); ?>
 			</p>
 		<p>
 			<input type="hidden" name="file_type_debug" value="no" />
-			<input type="checkbox" name="file_type_debug" value="yes" <?php if( isset($settings['file_type_debug']) && $settings['file_type_debug'] === "yes" ) echo "checked"; ?> <?php if(!$permission) echo "disabled"; ?>/> <?php _e('Enable to debug output for file types recognized by WordPress when a file is uploaded by the media. <br/>* By enabling both this option and the "Enable the attempt to determine the real file type of a file by WordPress core.", the file type is displayed if it is uploaded from Media.<br/>* PLEASE keep in mind that a file uploads are stopped while they are being processed if the both of two options are enabled. Therefore, be sure to disable this debugging option after debugging.','wp-add-mime-types'); ?>
-			</p>
+			<input type="checkbox" name="file_type_debug" value="yes" <?php checked( isset($settings['file_type_debug']) && $settings['file_type_debug'] === "yes" ); ?> <?php disabled( !$permission ); ?>/> <?php echo wp_kses_post( __( 'Record MIME type information detected by WordPress when a file is uploaded from the Media Library. When used together with "Enable the attempt to determine the real file type of a file by WordPress core.", the last detected extension, type, proper filename, and related MIME details can be reviewed on this settings screen. Disable this option after checking the information as needed.', 'wp-add-mime-types' ) ); ?>
+				</p>
      </fieldset>
+	 <br/>
+<?php wamt_render_last_mime_debug_result(); ?>
+	 <br/>
 
      <fieldset style="border:1px solid #777777; width: 750px; padding-left: 6px;">
-		<legend><h3><?php _e('Add Values','wp-add-mime-types'); ?></h3></legend>
-		<p><?php  _e('* About the mime type value for the file extension, please search "mime type [file extension name] using a search engine.<br/>Ex. epub = application/epub+zip<br/>Reference: <a href="http://www.iana.org/assignments/media-types/media-types.xhtml" target="_blank">Media Types on the Internet Assigned Numbers Authority (IANA)</a><br/>* If the added mime type does not work, please deactivate other mime type plugins or the setting of other mime type plugins.','wp-add-mime-types'); ?>
-		<br/><?php  _e('* Ignore to the right of "#" on a line. ','wp-add-mime-types'); ?>
-		<br/><?php  _e('*  If the head in each line is set to "-", then the MIME type restricts.<br/>ex. -bmp = image/bmp<br/>The files which has "bmp" file extention becomes not to be able to upload.','wp-add-mime-types'); ?></p>
+		<legend><h3><?php esc_html_e('Add Values','wp-add-mime-types'); ?></h3></legend>
+		<p><?php  echo wp_kses_post( __( '* About the mime type value for the file extension, please search "mime type [file extension name] using a search engine.<br/>Ex. epub = application/epub+zip<br/>Reference: <a href="http://www.iana.org/assignments/media-types/media-types.xhtml" target="_blank">Media Types on the Internet Assigned Numbers Authority (IANA)</a><br/>* If the added mime type does not work, please deactivate other mime type plugins or the setting of other mime type plugins.', 'wp-add-mime-types' ) ); ?>
+		<br/><?php  esc_html_e('* Ignore to the right of "#" on a line. ','wp-add-mime-types'); ?>
+		<br/><?php  echo wp_kses_post( __( '*  If the head in each line is set to "-", then the MIME type restricts.<br/>ex. -bmp = image/bmp<br/>The files which has "bmp" file extention becomes not to be able to upload.', 'wp-add-mime-types' ) ); ?></p>
 
 	<?php // If the permission is not allowed, the user can only read the setting. ?>
-		<textarea name="mime_type_values" cols="100" rows="10" <?php if(!$permission) echo "disabled"; ?>><?php if(isset($mimes) && is_array($mimes)) foreach ($mimes as $m_type=>$m_value) echo $m_type . "\t= " .$m_value . "\n"; ?></textarea>
+		<textarea name="mime_type_values" cols="100" rows="10" <?php disabled( !$permission ); ?>><?php if(isset($mimes) && is_array($mimes)) foreach ($mimes as $m_type=>$m_value) echo esc_textarea( $m_type . "\t= " . $m_value . "\n" ); ?></textarea>
      </fieldset>
      
      <br/>
      
-     <input type="submit" value="<?php _e('Save', 'wp-add-mime-types');  ?>" />
+     <input type="submit" value="<?php esc_attr_e('Save', 'wp-add-mime-types');  ?>" />
   </form>
 
 </div>
