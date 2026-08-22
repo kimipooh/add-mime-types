@@ -14,7 +14,7 @@
                 "php": ">=7.4"
         },
        "require-dev": {
-         "wp-coding-standards/wpcs": "^2.3",
+         "wp-coding-standards/wpcs": "^3.4.1",
          "dealerdirect/phpcodesniffer-composer-installer": "^0.7",
          "phpcompatibility/phpcompatibility-wp": "^2.1",
          "yoast/phpunit-polyfills": "^1.0.1",
